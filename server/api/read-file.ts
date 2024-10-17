@@ -1,6 +1,6 @@
 
 import { promises as fs } from 'fs';
-import { defineEventHandler, getQuery, sendStream } from 'h3';
+import { defineEventHandler, getQuery, sendStream, setResponseHeader, } from 'h3';
 import path from 'path';
 
 export default defineEventHandler(async (event) => {
@@ -12,14 +12,21 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const safeFilename = String(filename);
-
+    const safe = String(filename).replace(/[^a-zA-Z0-9._-]/g,"");
+    const allowedFiles = ["guide.pdf"];
+    if (!allowedFiles.includes(safeFilename)) {
+      throw new Error("Unauthorized file access");
+    }
     const baseDir = path.resolve('./uploads');
     const filePath = path.join(baseDir, safeFilename);
 
+    const fileStats = await fs.stat(filePath);
+    if (!fileStats.isFile()) {
+      throw new Error("File not found or not accessible");
+    }
     const fileStream = await fs.open(filePath, 'r');
 
-    setResponseHeader(event, 'Content-Disposition', `attachment; filename="${path.basename(filePath)}"`)
+    setResponseHeader(event, 'Content-Disposition', `attachment; filename="${safe}"`)
       
     return sendStream(event, fileStream.createReadStream());
   } catch (error) {
