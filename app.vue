@@ -18,6 +18,8 @@
             <label for="comment">Comment:</label>
             <textarea id="comment" v-model="form.comment" required></textarea>
 
+            <input type="hidden" name="csrf_token" :value="csrfToken" />
+
             <button type="submit">Add Comment</button>
           </form>
         </section>
@@ -29,6 +31,7 @@
             <label for="search">Keyword:</label>
             <input type="text" id="search" v-model="searchQuery" placeholder="Search for comments..." />
             <button type="submit">Search</button>
+            <input type="hidden" name="csrf_token" :value="csrfToken" />
             <button @click="fetchComments" type="button">Reset</button>
           </form>
         </section>
@@ -37,10 +40,10 @@
       <section v-if="comments.length">
         <article v-for="comment in comments" :key="comment.id" class="comment">
           <header>
-            <h3>{{ comment.name }}</h3>
-            <small>{{ comment.email }}</small>
+            <h3>{{ sanitizeHtml(comment.name) }}</h3>
+            <small>{{ sanitizeHtml(comment.email )}}</small>
           </header>
-          <div v-html="comment.comment"></div>
+          <div>{{ sanitizeHtml(comment.comment) }}</div>
         </article>
       </section>
     </div>
@@ -49,6 +52,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import DOMPurify from 'dompurify'
 
 const form = ref({
   name: '',
@@ -58,6 +62,14 @@ const form = ref({
 
 const comments = ref([])
 const searchQuery = ref('')
+const csrfToken = ref('')
+const sanitizeHtml = (html) => {
+  return DOMPurify.sanitize(html);
+}
+
+const sanitizeComment = (comment) => {
+  return DOMPurify.sanitize(comment);
+}
 
 const fetchComments = async () => {
   try {
@@ -70,11 +82,25 @@ const fetchComments = async () => {
   }
 }
 
+const fetchCsrfToken = async () => {
+  try {
+    const response = await $fetch('/api/get-csrf-token', {
+      method: 'GET'
+    })
+    csrfToken.value = response.token
+  } catch (error) {
+    console.error('Failed to fetch CSRF token:', error)
+  }
+}
+
 const addComment = async () => {
   try {
     await $fetch('/api/add-comment', {
       method: 'POST',
-      body: form.value
+      body: {
+        ...form.value,
+        _csrf: csrfToken.value
+      }
     })
 
     form.value = {
@@ -122,6 +148,7 @@ const downloadFile = async () => {
 
 onMounted(() => {
   fetchComments()
+  fetchCsrfToken()
 })
 </script>
 
